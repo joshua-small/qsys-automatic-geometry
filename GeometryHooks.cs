@@ -1,0 +1,216 @@
+using System.Collections;
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Windows;
+using System.Windows.Media;
+using HarmonyLib;
+
+namespace Designer.Modules.AutomaticGeometry;
+
+internal sealed class HostBindings
+{
+    private const BindingFlags Instance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+    internal readonly Type GraphicProvider, ModelConnector;
+    internal readonly FieldInfo LabelText, NominalWidth, ModelSize, UserCreated, PrettyName, CodeName;
+    internal readonly PropertyInfo ProviderModel, LabelPpd, Pins;
+    internal readonly MethodInfo Measure, CreatePins, ConnectorCreatePins, ConnectorRedraw, ConnectorAttach, ContainerCreate, ChannelCreate;
+
+    internal HostBindings(Assembly host)
+    {
+        Type T(string name) => host.GetType("QSC.QSys." + name, throwOnError: true)!;
+        FieldInfo F(Type type, string name) => type.GetField(name, Instance) ?? throw new MissingFieldException(type.FullName, name);
+        PropertyInfo P(Type type, string name) => type.GetProperty(name, Instance) ?? throw new MissingMemberException(type.FullName, name);
+        MethodInfo M(Type type, string name) => type.GetMethod(name, Instance | BindingFlags.Static | BindingFlags.DeclaredOnly) ?? throw new MissingMethodException(type.FullName, name);
+        GraphicProvider = T("Graphic.PinProvider");
+        ModelConnector = T("Design.ContainerPin");
+        Type label = T("Graphic.ComponentLabelText"), pin = T("Design.Pin");
+        LabelText = F(GraphicProvider, "_LabelText");
+        NominalWidth = F(label, "NominalWidth");
+        ModelSize = F(T("Design.Object"), "_Size");
+        ProviderModel = P(GraphicProvider, "InnerPinProvider");
+        LabelPpd = P(label, "PPD");
+        Pins = P(T("Design.PinProvider"), "Pins");
+        UserCreated = F(pin, "UserCreated");
+        PrettyName = F(pin, "PrettyName");
+        CodeName = F(pin, "CodeName");
+        Measure = T("Graphic.Element").GetMethod("GetFormattedText", BindingFlags.Public | BindingFlags.Static,
+            null, [typeof(string), typeof(double), typeof(double)], null)
+            ?? throw new MissingMethodException("Graphic.Element.GetFormattedText(string,double,double)");
+        CreatePins = M(GraphicProvider, "_CreatePins");
+        ConnectorCreatePins = M(T("Graphic.ContainerPin"), "_CreatePins");
+        ConnectorRedraw = M(T("Graphic.ContainerPin"), "Redraw");
+        ConnectorAttach = M(ModelConnector, "_Attach");
+        ContainerCreate = M(T("Design.ContainerHelper"), "CreatePins");
+        ChannelCreate = M(T("Design.ChannelGroupHelper"), "CreateInternalPin");
+        if (NominalWidth.FieldType != typeof(double) || ModelSize.FieldType != typeof(Size))
+            throw new InvalidOperationException("Unexpected host geometry field types.");
+    }
+}
+
+internal static class GeometryHooks
+{
+    internal const string PatchId = "local.qsys.automatic-schematic-geometry";
+    internal static HostBindings? Host;
+    internal static Action<string, object>? Report;
+    private static int widthReports, connectorReports, failures;
+
+    internal static Harmony Install(HostBindings host)
+    {
+        Host = host;
+        var harmony = new Harmony(PatchId);
+        var targets = new[] { host.CreatePins, host.ConnectorAttach, host.ConnectorCreatePins, host.ConnectorRedraw, host.ContainerCreate, host.ChannelCreate };
+        foreach (var target in targets)
+            if (Harmony.GetPatchInfo(target)?.Owners.Any() == true)
+                throw new InvalidOperationException("Another runtime patch already changes " + target.DeclaringType?.FullName + "." + target.Name);
+        try
+        {
+            // Check the two creation helpers before installing any patches.
+            foreach (var target in new[] { host.ContainerCreate, host.ChannelCreate })
+                _ = TenUnitCreation(PatchProcessor.GetOriginalInstructions(target)).ToList();
+            _ = CenterConnectorPins(PatchProcessor.GetOriginalInstructions(host.ConnectorCreatePins)).ToList();
+            _ = CenterConnectorText(PatchProcessor.GetOriginalInstructions(host.ConnectorRedraw)).ToList();
+            harmony.Patch(host.CreatePins, prefix: Hook(nameof(FitPinLabels)));
+            harmony.Patch(host.ConnectorAttach, prefix: Hook(nameof(NormalizeConnectorModel)));
+            harmony.Patch(host.ConnectorCreatePins, prefix: Hook(nameof(NormalizeConnectorGraphic)), transpiler: Hook(nameof(CenterConnectorPins)));
+            harmony.Patch(host.ConnectorRedraw, transpiler: Hook(nameof(CenterConnectorText)));
+            harmony.Patch(host.ContainerCreate, transpiler: Hook(nameof(TenUnitCreation)));
+            harmony.Patch(host.ChannelCreate, transpiler: Hook(nameof(TenUnitCreation)));
+            return harmony;
+        }
+        catch
+        {
+            harmony.UnpatchAll(PatchId);
+            Host = null;
+            throw;
+        }
+    }
+
+    private static HarmonyMethod Hook(string name) => new(typeof(GeometryHooks).GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)!);
+
+    internal static void FitPinLabels(object __instance)
+    {
+        try
+        {
+            var h = Host!;
+            object model = h.ProviderModel.GetValue(__instance)!;
+            object label = h.LabelText.GetValue(__instance)!;
+            double ppd = (double)h.LabelPpd.GetValue(label)!;
+            var widths = new List<double>();
+            foreach (object pin in (IEnumerable)h.Pins.GetValue(model)!)
+            {
+                if (!(bool)h.UserCreated.GetValue(pin)!) continue;
+                string text = (string?)h.PrettyName.GetValue(pin) ?? "";
+                if (text.Length == 0) text = (string?)h.CodeName.GetValue(pin) ?? "";
+                // Invoke the host's exact pin-label formatter, preserving font, DPI, and culture.
+                var measured = (FormattedText)h.Measure.Invoke(null, [text, 10.0, ppd])!;
+                widths.Add(measured.WidthIncludingTrailingWhitespace);
+            }
+            double target = GeometryRules.TextWidth(widths);
+            double previous = (double)h.NominalWidth.GetValue(label)!;
+            if (target == previous) return;
+            h.NominalWidth.SetValue(label, target);
+            // NominalWidth is a field; setting PPD to its existing value invalidates the host cache.
+            h.LabelPpd.SetValue(label, h.LabelPpd.GetValue(label));
+            if (widthReports++ < 20) Report?.Invoke("width-adjusted", new { previous, target, exposedPinCount = widths.Count });
+        }
+        catch (Exception error) { Failure("width", error); }
+    }
+
+    internal static void NormalizeConnectorGraphic(object __instance)
+    {
+        try { NormalizeConnectorModel(Host!.ProviderModel.GetValue(__instance)!); }
+        catch (Exception error) { Failure("connector-graphic", error); }
+    }
+
+    internal static void NormalizeConnectorModel(object __instance)
+    {
+        try
+        {
+            var h = Host!;
+            if (!h.ModelConnector.IsInstanceOfType(__instance)) return;
+            var size = (Size)h.ModelSize.GetValue(__instance)!;
+            if (size.IsEmpty || !double.IsFinite(size.Width) || size.Width <= 0 || size.Height == GeometryRules.ConnectorHeight) return;
+            // This is a derived geometry normalization at attach/create time, not an editing command.
+            // Preserve width and Position; avoid inserting an undo operation during deserialization.
+            h.ModelSize.SetValue(__instance, new Size(size.Width, GeometryRules.ConnectorHeight));
+            if (connectorReports++ < 20) Report?.Invoke("connector-height-adjusted", new { previous = size.Height, height = GeometryRules.ConnectorHeight });
+        }
+        catch (Exception error) { Failure("connector-model", error); }
+    }
+
+    internal static IEnumerable<CodeInstruction> TenUnitCreation(IEnumerable<CodeInstruction> instructions)
+    {
+        var code = instructions.Select(x => new CodeInstruction(x)).ToList();
+        var matches = code.Where(x => x.LoadsConstant(12L)).ToList();
+        if (matches.Count != 1) throw new InvalidOperationException("Expected exactly one 12-unit connector creation constant, found " + matches.Count);
+        // The inspected local variable supplies both Size.Height and new-connector vertical pitch.
+        matches[0].opcode = OpCodes.Ldc_I4_S;
+        matches[0].operand = (sbyte)10;
+        return code;
+    }
+
+    internal static IEnumerable<CodeInstruction> CenterConnectorPins(IEnumerable<CodeInstruction> instructions)
+    {
+        var code = instructions.Select(x => new CodeInstruction(x)).ToList();
+        var constructor = typeof(Point).GetConstructor([typeof(double), typeof(double)])!;
+        var helper = typeof(GeometryHooks).GetMethod(nameof(CenteredConnectorPin), BindingFlags.NonPublic | BindingFlags.Static)!;
+        int count = 0;
+        for (int i = code.Count - 1; i >= 0; i--)
+        {
+            if (code[i].opcode != OpCodes.Newobj || !Equals(code[i].operand, constructor)) continue;
+            // Native input/output centers use y=6 for a 12-unit body. Change the
+            // model center before AddPin and native positioning/wire updates run.
+            code.Insert(i + 1, new CodeInstruction(OpCodes.Call, helper));
+            count++;
+        }
+        if (count != 2) throw new InvalidOperationException("Expected two connector pin-center constructions, found " + count);
+        return code;
+    }
+
+    private static Point CenteredConnectorPin(Point original) =>
+        new(original.X, original.Y + (GeometryRules.ConnectorHeight - 12.0) / 2.0);
+
+    internal static IEnumerable<CodeInstruction> CenterConnectorText(IEnumerable<CodeInstruction> instructions)
+    {
+        var code = instructions.Select(x => new CodeInstruction(x)).ToList();
+        var draw = typeof(DrawingContext).GetMethod(nameof(DrawingContext.DrawText), [typeof(FormattedText), typeof(Point)])!;
+        var helper = typeof(GeometryHooks).GetMethod(nameof(DrawCenteredConnectorText), BindingFlags.NonPublic | BindingFlags.Static)!;
+        int count = 0;
+        for (int i = code.Count - 1; i >= 0; i--)
+        {
+            if (!code[i].Calls(draw)) continue;
+            // Leave native FormattedText, size 10, brush and horizontal alignment
+            // untouched. Preserve branch labels on the first replacement instruction.
+            var loadThis = new CodeInstruction(OpCodes.Ldarg_0);
+            loadThis.labels.AddRange(code[i].labels);
+            loadThis.blocks.AddRange(code[i].blocks);
+            code[i] = loadThis;
+            code.Insert(i + 1, new CodeInstruction(OpCodes.Call, helper));
+            count++;
+        }
+        if (count != 2) throw new InvalidOperationException("Expected two connector label DrawText calls, found " + count);
+        return code;
+    }
+
+    private static void DrawCenteredConnectorText(DrawingContext context, FormattedText text, Point origin, object graphic)
+    {
+        Point adjusted = origin;
+        try
+        {
+            var h = Host!;
+            var size = (Size)h.ModelSize.GetValue(h.ProviderModel.GetValue(graphic)!)!;
+            // Measure ink only; DrawText still renders the original glyphs using
+            // normal WPF text rendering. No scaling or font-size substitution.
+            Rect ink = text.BuildGeometry(new Point()).Bounds;
+            if (!ink.IsEmpty && double.IsFinite(ink.Top) && double.IsFinite(ink.Height))
+                adjusted.Y = (size.Height - ink.Height) / 2.0 - ink.Top;
+        }
+        catch (Exception error) { Failure("connector-text", error); }
+        context.DrawText(text, adjusted);
+    }
+
+    private static void Failure(string operation, Exception error)
+    {
+        if (failures++ < 10) Report?.Invoke("geometry-error", new { operation, error = error.GetBaseException().Message });
+    }
+}
