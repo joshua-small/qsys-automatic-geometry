@@ -30,8 +30,6 @@ public sealed class AutomaticGeometryModule : IDesignerModule
     {
         try
         {
-            string marker = Path.Combine(AppContext.BaseDirectory, ".automatic-geometry-enabled");
-            if (!File.Exists(marker) || File.ReadAllText(marker).Trim() != DesignerHash) return;
             if (Hash(Path.Combine(AppContext.BaseDirectory, "Q-Sys Designer.dll")) != DesignerHash ||
                 Hash(Path.Combine(AppContext.BaseDirectory, "ModuleCommon.dll")) != CommonHash)
                 throw new InvalidOperationException("Designer build differs from the inspected 10.5.0 build; no geometry hooks installed.");
