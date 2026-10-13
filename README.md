@@ -1,3 +1,5 @@
+<img src="catalog/artwork/avitex-wordmark-blue.svg" alt="Avitex" width="220">
+
 # Q-SYS Automatic Geometry
 
 Automatically make components wide enough for their control-pin labels and use 10-unit Container/Channel Group connectors.

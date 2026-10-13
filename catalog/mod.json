@@ -4,6 +4,6 @@
   "name": "Automatic Geometry",
   "description": "Automatic component widths for control-pin labels, plus 10-unit Container and Channel Group connectors with centered labels and pins.",
   "author": "joshua-small",
-  "thumbnail": "catalog/icon.ico",
+  "thumbnail": "catalog/artwork/avitex.ico",
   "helpUrl": "https://github.com/joshua-small/qsys-automatic-geometry"
 }
