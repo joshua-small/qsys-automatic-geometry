@@ -22,6 +22,8 @@ These are reviewable source candidates, not released or installed packages. Publ
 
 All three candidates require Core >=0.1.6 and <0.2.0; the diagnostics page needs the accompanying unreleased Core change. Ship Core as a package dependency, not a private runtime copy. New module identities, renamed presentation and dependency/file-layout changes need signed catalog approval before publication. Historical assets and exact pins remain immutable. The subprojects share this repository for review but produce separate DLLs; they are not automatically included in the width package.
 
+The publishing descriptor retains the approved Automatic Geometry canonical name until a coordinated rename can preserve old package pins and receipts. Component Auto Width is the approved name for this successor; the manager-visible rename is pending that migration, not silently applied to historical releases.
+
 ## Development and verification
 
 Clone `qsys-mods-core` beside this repository. Use .NET 10.0.112, local Designer references and separate WSL build outputs:

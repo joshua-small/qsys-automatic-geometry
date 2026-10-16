@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "automatic-geometry",
-  "name": "Component Auto Width",
+  "name": "Automatic Geometry",
   "description": "Automatically fit component widths to exposed control-pin labels without changing their text. Connector resizing and snapping are provided separately by Compact Connectors.",
   "author": "joshua-small",
   "thumbnail": "catalog/artwork/avitex.ico",
