@@ -1,0 +1,14 @@
+name: Geometry and Snake contracts
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.112'
+      - run: dotnet run --project tests/GeometryTests.csproj -c Release --artifacts-path artifacts/geometry-tests
+      - run: dotnet run --project SnakeConnectors/tests/Snake.Tests.csproj -c Release --artifacts-path artifacts/snake-tests

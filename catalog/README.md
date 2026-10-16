@@ -1,6 +1,8 @@
 # Mod Manager content
 
-This repository owns the content displayed for Automatic Geometry in Q-SYS Mod Manager.
+This repository owns the content displayed for Component Auto Width (stable ID `automatic-geometry`) in Q-SYS Mod Manager. Published 0.1.x content used Automatic Geometry. The unreleased split, renamed presentation and Core dependency need catalog approval before release; the two new subprojects do not yet have approved packages. See [migration](../README.md#candidate-and-migration).
+
+`mod.json` retains the currently approved canonical name **Automatic Geometry** until the coordinated rename supports immutable historical packages and receipts. The owner-approved successor name is **Component Auto Width**. Changing the live descriptor alone fails the publisher's exact-name contract; do not weaken that check or rewrite old releases. The workflow uses the same schema-3 validator revision as Core and Better Packing.
 
 - Edit `mod.json` for the description, GitHub username, artwork path and repository help link.
 - Keep artwork in this directory as PNG, JPEG or ICO (at most 1 MiB). The thumbnail uses the supplied Avitex icon; source artwork and provenance are in [artwork/](artwork/README.md).

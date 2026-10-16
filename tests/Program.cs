@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Media;
 using Designer.Modules.AutomaticGeometry;
 using HarmonyLib;
+using Designer.Modules.CompactConnectors;
 
 internal static class Program
 {
@@ -34,18 +35,39 @@ internal static class Program
                 File.Exists(Path.Combine(directory, name.Name + ".dll")) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(directory, name.Name + ".dll")) : null;
             var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(directory, "Q-Sys Designer.dll"));
             var actual = new HostBindings(assembly);
+            var connectors = new ConnectorBindings(assembly);
+            _ = new ConnectorSnapping(assembly);
+            Check(true, "actual snap domain, body height and native point bindings resolve");
             Check(actual.CreatePins.MetadataToken == 0x06002efd, "actual QDS fit method token");
-            Check(GeometryHooks.TenUnitCreation(PatchProcessor.GetOriginalInstructions(actual.ContainerCreate)).Count() > 0, "actual Container helper has exactly one height/pitch constant");
-            Check(GeometryHooks.TenUnitCreation(PatchProcessor.GetOriginalInstructions(actual.ChannelCreate)).Count() > 0, "actual Channel Group helper has exactly one height/pitch constant");
-            Check(GeometryHooks.CenterConnectorPins(PatchProcessor.GetOriginalInstructions(actual.ConnectorCreatePins)).Count() > 0, "actual connector has exactly two pin-center constructions");
-            Check(GeometryHooks.CenterConnectorText(PatchProcessor.GetOriginalInstructions(actual.ConnectorRedraw)).Count() > 0, "actual connector has exactly two text drawing calls");
+            Check(ConnectorHooks.TenUnitCreation(PatchProcessor.GetOriginalInstructions(connectors.ContainerCreate)).Count() > 0, "actual Container helper has exactly one height/pitch constant");
+            Check(ConnectorHooks.TenUnitCreation(PatchProcessor.GetOriginalInstructions(connectors.ChannelCreate)).Count() > 0, "actual Channel Group helper has exactly one height/pitch constant");
+            Check(ConnectorHooks.CenterConnectorPins(PatchProcessor.GetOriginalInstructions(connectors.ConnectorCreatePins)).Count() > 0, "actual connector has exactly two pin-center constructions");
+            Check(ConnectorHooks.CenterConnectorText(PatchProcessor.GetOriginalInstructions(connectors.ConnectorRedraw)).Count() > 0, "actual connector has exactly two text drawing calls");
             Console.WriteLine($"{checks} actual-host metadata checks passed; no host method invoked or patched.");
             return 0;
         }
         var events = new List<string>();
         GeometryHooks.Report = (kind, _) => events.Add(kind);
         var h = GeometryHooks.Install(new HostBindings(Assembly.GetExecutingAssembly()));
-        Check(h.GetPatchedMethods().Count() == 6, "six targeted methods hooked on .NET 10");
+        Check(h.GetPatchedMethods().Count() == 1, "width installs without connector hooks");
+        Check(QSC.QSys.Design.ContainerHelper.Create(3).Size.Height == 12, "width alone leaves connectors native");
+        ConnectorHooks.Report = (kind, _) => events.Add(kind);
+        var ch = ConnectorHooks.Install(new ConnectorBindings(Assembly.GetExecutingAssembly()));
+        Check(ch.GetPatchedMethods().Count() == 5, "connector geometry installs under a separate owner");
+        new ConnectorSnapping(Assembly.GetExecutingAssembly()).Install(ch);
+        var snapModel = new QSC.QSys.Design.PinProvider { Position = new Point(20, 30) };
+        var snapComponent = new QSC.QSys.Graphic.Component(snapModel) { DrawnHeight = 56 };
+        var snapConnector = new QSC.QSys.Graphic.ContainerPin(new QSC.QSys.Design.ContainerPin());
+        Check(snapConnector.SnapDomain == QSC.QSys.Tools.SnapTool.Domain.Wiring, "connector reuses native Wiring snap domain");
+        Check(snapComponent.SnapDomain == QSC.QSys.Tools.SnapTool.Domain.Default, "ordinary component retains default snapping");
+        var snapPoints = new List<QSC.QSys.Tools.ToolPoint>();
+        snapComponent.GetSnapPoints(ref snapPoints, QSC.QSys.Tools.SnapTool.Domain.Default);
+        Check(snapPoints.Count == 6 && snapPoints[4].Value == new Point(20,54) && snapPoints[5].Value == new Point(102,54), "open drawer preserves four outer corners and adds both main-body bottom corners");
+        snapComponent.DrawnHeight = 24; snapPoints.Clear();
+        snapComponent.GetSnapPoints(ref snapPoints, QSC.QSys.Tools.SnapTool.Domain.Default);
+        Check(snapPoints.Count == 4, "closed drawer has no duplicate body targets");
+        snapPoints.Clear(); snapComponent.GetSnapPoints(ref snapPoints, QSC.QSys.Tools.SnapTool.Domain.Wiring);
+        Check(snapPoints.Count == 0, "body targets do not enter Wiring snapping");
         var model = new QSC.QSys.Design.PinProvider { Label = "Name\u001dLabel\u001d" };
         var graphic = new QSC.QSys.Graphic.PinProvider(model);
         graphic._CreatePins();
@@ -109,19 +131,29 @@ internal static class Program
         Check(fallbackGraphic.Visual.Drawing is null || fallbackGraphic.Visual.Drawing.Children.Count == 0, "empty connector label stays empty");
         Check(!events.Contains("geometry-error"), "no hook failures");
         bool rejected = false;
-        try { GeometryHooks.TenUnitCreation([]).ToList(); } catch (InvalidOperationException) { rejected = true; }
+        try { ConnectorHooks.TenUnitCreation([]).ToList(); } catch (InvalidOperationException) { rejected = true; }
         Check(rejected, "unexpected creation IL rejected");
         rejected = false;
-        try { GeometryHooks.CenterConnectorPins([]).ToList(); } catch (InvalidOperationException) { rejected = true; }
+        try { ConnectorHooks.CenterConnectorPins([]).ToList(); } catch (InvalidOperationException) { rejected = true; }
         Check(rejected, "unexpected pin-center IL rejected");
         rejected = false;
-        try { GeometryHooks.CenterConnectorText([]).ToList(); } catch (InvalidOperationException) { rejected = true; }
+        try { ConnectorHooks.CenterConnectorText([]).ToList(); } catch (InvalidOperationException) { rejected = true; }
         Check(rejected, "unexpected text-drawing IL rejected");
+        ch.UnpatchAll(ConnectorHooks.PatchId);
+        Check(snapConnector.SnapDomain == QSC.QSys.Tools.SnapTool.Domain.Default, "unpatch restores native connector snapping");
+        Check(Harmony.GetPatchInfo(new HostBindings(Assembly.GetExecutingAssembly()).CreatePins)!.Owners.Contains(GeometryHooks.PatchId), "removing connectors preserves width hook");
         h.UnpatchAll(GeometryHooks.PatchId);
         Check(QSC.QSys.Design.ContainerHelper.Create(3).Size.Height == 12 && QSC.QSys.Design.ChannelGroupHelper.Create(3).Position.Y == 36, "uninstall restores original creation behavior");
         Check(container.Size.Height == 10, "normalized stored model height remains after removing hooks");
         fallbackGraphic._CreatePins();
         Check(fallback.Pins[0].Center.Y == 6, "unpatch restores native pin-center calculation");
+        var standalone = ConnectorHooks.Install(new ConnectorBindings(Assembly.GetExecutingAssembly()));
+        Check(Harmony.GetPatchInfo(new HostBindings(Assembly.GetExecutingAssembly()).CreatePins)?.Owners.Contains(GeometryHooks.PatchId) != true, "connectors install without width");
+        var independentWidth = GeometryHooks.Install(new HostBindings(Assembly.GetExecutingAssembly()));
+        rejected = false;
+        try { ConnectorHooks.Install(new ConnectorBindings(Assembly.GetExecutingAssembly())); } catch (InvalidOperationException) { rejected = true; }
+        Check(rejected && Harmony.GetPatchInfo(new HostBindings(Assembly.GetExecutingAssembly()).CreatePins)!.Owners.Contains(GeometryHooks.PatchId), "connector preflight failure leaves width active");
+        independentWidth.UnpatchAll(GeometryHooks.PatchId); standalone.UnpatchAll(ConnectorHooks.PatchId);
         Console.WriteLine($"{checks} behavioral checks passed on native Windows WPF / {Environment.Version}.");
         return 0;
     }
@@ -167,6 +199,10 @@ namespace QSC.QSys.Design
 
 namespace QSC.QSys.Graphic
 {
+    public class Object
+    {
+        public virtual QSC.QSys.Tools.SnapTool.Domain SnapDomain { [MethodImpl(MethodImplOptions.NoInlining)] get => QSC.QSys.Tools.SnapTool.Domain.Default; }
+    }
     public class ComponentLabelText
     {
         public double NominalWidth = 54;
@@ -174,8 +210,19 @@ namespace QSC.QSys.Graphic
         public int Invalidations;
         public double PPD { get => ppd; set { ppd = value; Invalidations++; } }
     }
-    public class PinProvider
+    public class PinProvider : Object
     {
+        protected double _BuiltInHeight = 24;
+        public double DrawnHeight = 24;
+        public virtual Size Size => new(82, DrawnHeight);
+        public Point Position => InnerPinProvider.Position;
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void GetSnapPoints(ref List<QSC.QSys.Tools.ToolPoint> pts, QSC.QSys.Tools.SnapTool.Domain domain)
+        {
+            if (domain != QSC.QSys.Tools.SnapTool.Domain.Default) return;
+            var rect = new Rect(Position, Size);
+            foreach (var p in new[] { rect.TopLeft, rect.TopRight, rect.BottomLeft, rect.BottomRight }) pts.Add(new(p));
+        }
         protected ComponentLabelText _LabelText = new();
         public ComponentLabelText LabelText => _LabelText;
         public Design.PinProvider InnerPinProvider { get; }
@@ -184,6 +231,7 @@ namespace QSC.QSys.Graphic
         public PinProvider(Design.PinProvider model) => InnerPinProvider = model;
         [MethodImpl(MethodImplOptions.NoInlining)] public virtual void _CreatePins() { Calls++; TextWidth = _LabelText.NominalWidth; }
     }
+    public class Component(Design.PinProvider model) : PinProvider(model) { }
     public class ContainerPin(Design.ContainerPin model) : PinProvider(model)
     {
         public DrawingVisual Visual = new();
@@ -213,4 +261,10 @@ namespace QSC.QSys.Graphic
         public static FormattedText GetFormattedText(string text, double size, double ppd) =>
             new(text, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface("Calibri"), size, Brushes.Black, ppd);
     }
+}
+
+namespace QSC.QSys.Tools
+{
+    public class SnapTool { public enum Domain { Default, Wiring, Popup } }
+    public readonly record struct ToolPoint(Point Value);
 }

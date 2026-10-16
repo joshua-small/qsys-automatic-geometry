@@ -9,6 +9,8 @@
     <Compile Remove="ConnectorProbe/**/*.cs" />
     <Compile Include="../GeometryHooks.cs" Link="GeometryHooks.cs" />
     <Compile Include="../GeometryRules.cs" Link="GeometryRules.cs" />
+    <Compile Include="../CompactConnectors/ConnectorHooks.cs" Link="ConnectorHooks.cs" />
+    <Compile Include="../CompactConnectors/ConnectorSnapping.cs" Link="ConnectorSnapping.cs" />
     <PackageReference Include="Lib.Harmony" Version="2.4.2" />
   </ItemGroup>
 </Project>
