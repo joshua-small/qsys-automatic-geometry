@@ -6,6 +6,8 @@ Automatically make components wide enough for their control-pin labels and use 1
 
 Install **Automatic Geometry** from [Q-SYS Mod Manager](https://github.com/joshua-small/qsys-mod-manager/releases/latest), then restart Designer. It works automatically and keeps component label text unchanged.
 
+The module removes its loader-created menu item after Designer startup; it needs no manual action. Startup, compatibility and geometry diagnostics remain in JSON receipts under `%LOCALAPPDATA%\QsysSchematicTools\Designer-10.5\automatic-geometry`. An `installed` receipt records hook registration for that process, not acceptance of every geometry behavior. On an unsupported Designer build the module records a startup error and makes no hooks or menu changes.
+
 The automatic width behavior requires the mod. Existing connector positions are preserved.
 
 Disable or remove the bundle through Mod Manager while Designer is closed. Supports the compatible Q-SYS Designer 10.5 build on Windows; this is an unofficial Designer extension.
