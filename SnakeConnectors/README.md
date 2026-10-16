@@ -4,7 +4,7 @@ Independent candidate for passing a Signal Snake bundle through a generic Contai
 
 ## Two separate findings
 
-The user reports individual Snake channels cannot wire to connectors **inside Containers or Channel Groups**, and that Snakes do not work there. This remains unresolved. Sixteen unattached native-model checks accept those individual-channel pairs in both directions for generic, Audio and Control connectors. The inspected Snake creator and wire creation path contain no general Container veto. These tests do not recreate the user's canvas, hit testing, existing nets or attached-model lifecycle. They are not a fix or a dismissal of the report.
+The owner confirmed on 2026-10-16 that ordinary Signal Snakes work inside Containers and withdrew the earlier failure report. They explicitly chose to keep whole-bundle routing as future work while installing the geometry updates. No individual-channel fix is required or claimed. Sixteen isolated native-model compatibility checks also accepted the scalar pairs; they were not a real-canvas reproduction.
 
 Whole-bundle wiring has a concrete restriction: native `WireTool.CanWireMux` requires both endpoints to be Snake providers. Dynamic typing also resets an empty Container boundary to Unknown. This candidate adapts those checks and reuses native connected-pin traversal, per-channel compatibility, network validation and type propagation. It creates no custom wire format and preserves normal endpoint direction and named-input rules.
 
@@ -30,4 +30,4 @@ dotnet run --project SnakeConnectors/tests/Snake.Tests.csproj -c Release --artif
 
 Run on Windows. The synthetic Harmony harness passes 20 checks. A Designer directory argument verifies bindings without patches. Adding `--models` runs 16 native individual-channel checks before hooks, then six bundle checks against unattached native objects in the test process. Those confirm rejection before hooks, acceptance after hooks, traversal through a Container jumper and matching-channel extraction. They do not launch or patch a running Designer process or load/save a design.
 
-Next reproduce the report with a small Container, its input/output connectors, paired Snakes inside and a simple Audio source/sink outside. Check wiring in both directions with native and compact connectors, hit testing, propagation and existing-net restrictions. Repeat Channel Groups separately; their result must not block Container work or silently expand support. Package onboarding is pending; see [migration](../README.md#candidate-and-migration).
+Future work must validate attached bundle propagation, disconnect/deletion, undo/redo, copy/paste, save/reopen, extraction/compile and signal operation in a small disposable Container fixture before a routing release. Channel Group bundle semantics remain separate. No catalog onboarding, release or installation is part of the geometry update. Tracking: https://github.com/joshua-small/qsys-automatic-geometry/issues/6.

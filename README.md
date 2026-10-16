@@ -1,41 +1,24 @@
 <img src="catalog/artwork/avitex-wordmark-blue.svg" alt="Avitex" width="220">
 
-# Component Auto Width
+# Automatic Geometry (legacy bundle)
 
-Automatically fit component widths to exposed control-pin labels without changing their text.
+Automatic Geometry has been split into two independently maintained mods:
 
-The unreleased 0.2 source separates the former Automatic Geometry features:
+- [Component Auto Width](https://github.com/joshua-small/qsys-component-auto-width): fits exposed control-pin labels without changing their text.
+- [Compact Connectors](https://github.com/joshua-small/qsys-compact-connectors): 10-unit Container/Channel Group connectors, native pin snapping and open-drawer body snap targets.
 
-| Module | Behavior |
-| --- | --- |
-| Component Auto Width | Component label fitting. Keeps the existing `automatic-geometry` package ID and `Designer.Modules.AutomaticGeometry.dll` identity. |
-| [Compact Connectors](CompactConnectors/README.md) | Independent 10-unit Container/Channel Group connectors, pin snapping and open-drawer body snap targets. |
-| [Snake Connectors](SnakeConnectors/README.md) | Separate experimental Container bundle routing. The reported individual-channel failure inside Containers remains under investigation. |
+Use Mod Manager to replace Automatic Geometry with either or both successors in one profile transaction, together with Mods Core 0.1.7. Their catalog conflicts prevent overlapping legacy hooks. Historical 0.1.x releases, original package names and exact pins remain available for rollback. This repository retains the reviewed split's source history; ongoing successor changes belong in the repositories above. There is no new Automatic Geometry 0.2 package.
 
-Each module can run independently with [Mods Core](https://github.com/joshua-small/qsys-mods-core). There is no Automatic Geometry Status menu action. The accompanying Core change puts initialization state, assembly identity and failures in **File > Preferences > Mod Diagnostics**. Ready means initialization succeeded; it does not establish acceptance of every behavior.
+The dedicated status menu is removed. Initialization state, assembly identity and failures are in **File > Preferences > Mod Diagnostics**. Ready means initialization succeeded.
 
-Width receipts retain `%LOCALAPPDATA%\QsysSchematicTools\Designer-10.5\automatic-geometry`. Shared status and the other modules use `%LOCALAPPDATA%\QsysMods\Designer-10.5\diagnostics`.
+[Better Packing](https://github.com/joshua-small/qsys-better-packing) 0.2.2 supplies Pack to Top Pins and Pack to Bottom Pins using actual rendered centers. Boundary packing retains its original meaning.
 
-## Candidate and migration
+## Signal Snake research
 
-These are reviewable source candidates, not released or installed packages. Published 0.1.x Automatic Geometry packages still combine width and connector resizing. A coordinated release must replace that legacy DLL with the width-only build before enabling Compact Connectors. Competing connector implementations are unsupported; hook-owner preflight rejects existing patches.
+The owner confirmed on 2026-10-16 that ordinary Signal Snakes work inside Containers, withdrawing the earlier failure report. No fix to normal individual-channel wiring is required for this release. The separate [whole-bundle prototype](SnakeConnectors/README.md) remains future work by explicit owner choice; it is not released or installed. [Tracking #6](https://github.com/joshua-small/qsys-automatic-geometry/issues/6).
 
-All three candidates require Core >=0.1.6 and <0.2.0; the diagnostics page needs the accompanying unreleased Core change. Ship Core as a package dependency, not a private runtime copy. New module identities, renamed presentation and dependency/file-layout changes need signed catalog approval before publication. Historical assets and exact pins remain immutable. The subprojects share this repository for review but produce separate DLLs; they are not automatically included in the width package.
+## Retained verification
 
-The publishing descriptor retains the approved Automatic Geometry canonical name until a coordinated rename can preserve old package pins and receipts. Component Auto Width is the approved name for this successor; the manager-visible rename is pending that migration, not silently applied to historical releases.
+The split's combined synthetic harness has 44 WPF checks and six actual-host metadata/IL checks. Successors retain independent tests. A disposable Designer 10.5 run exercised pin alignment, native snap targets and undo/redo in Containers, Channel Groups and a second nesting level, with the original fixture unchanged. Individual feature repositories document current acceptance and remaining limits.
 
-## Development and verification
-
-Clone `qsys-mods-core` beside this repository. Use .NET 10.0.112, local Designer references and separate WSL build outputs:
-
-```text
-dotnet build Designer.Modules.AutomaticGeometry.csproj -c Release -p:DesignerDir="<Designer directory>" --artifacts-path ../build-width
-dotnet build CompactConnectors/Designer.Modules.CompactConnectors.csproj -c Release -p:DesignerDir="<Designer directory>" --artifacts-path ../build-connectors
-dotnet run --project tests/GeometryTests.csproj -c Release --artifacts-path ../geometry-tests
-```
-
-Run the WPF harness on Windows. Its 44 checks cover independent hook ownership, fitting, connector geometry, snapping and rollback. Passing the installed Designer directory as an argument adds six metadata/IL checks without invoking or patching host methods. The supported Designer 10.5.0.0 hash is `0e7150f8dc02e0159e019188780fb003ce025f5ec18c491609cf337d849bda60`; Core also checks ModuleCommon. Other builds stay disabled.
-
-The split, drag snapping, open-drawer behavior and Preferences integration still need scoped Designer checks. `tests/LabProbe` and `tests/ConnectorProbe` retain guarded disposable-Designer fixtures; the connector probe now waits for Compact Connectors. Previous combined-module acceptance does not validate these candidates. No design or application installation was modified by these checks.
-
-Manager presentation and immutable release history live in [catalog/](catalog/README.md).
+Build source with .NET 10.0.112, a sibling Mods Core checkout and local DesignerDir references. Vendor binaries, designs, raw captures and build outputs are excluded. Historical source is not an authorization to publish a package with incompatible catalog identity or duplicate successor hooks.
