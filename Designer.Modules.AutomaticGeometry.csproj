@@ -6,12 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>Designer.Modules.AutomaticGeometry</AssemblyName>
-    <Version>0.1.2</Version>
+    <Version>0.2.0</Version>
     <Deterministic>true</Deterministic>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="tests/**/*.cs" />
+    <Compile Remove="tests/**/*.cs;CompactConnectors/**/*.cs;SnakeConnectors/**/*.cs;artifacts/**/*.cs" />
+    <ProjectReference Include="../qsys-mods-core/Core/Qmm.Shared.ModsCore.csproj" />
     <PackageReference Include="Lib.Harmony" Version="2.4.2" />
     <Reference Include="ModuleCommon">
       <HintPath>$(DesignerDir)/ModuleCommon.dll</HintPath>

@@ -67,8 +67,8 @@ public sealed class ConnectorProbe : IDesignerModule
             if (attempts < 15 || Application.Current.MainWindow is not { IsLoaded: true, IsEnabled: true }) return;
             Assembly host = AppDomain.CurrentDomain.GetAssemblies().Single(x => x.GetName().Name == "Q-Sys Designer");
             Type T(string name) => host.GetType("QSC.QSys." + name, true)!;
-            var mod = AppDomain.CurrentDomain.GetAssemblies().Single(x => x.GetName().Name == "Designer.Modules.AutomaticGeometry");
-            if (mod.GetType("Designer.Modules.AutomaticGeometry.GeometryHooks", true)!.GetField("Host", Static)!.GetValue(null) is null) return;
+            var mod = AppDomain.CurrentDomain.GetAssemblies().Single(x => x.GetName().Name == "Designer.Modules.CompactConnectors");
+            if (mod.GetType("Designer.Modules.CompactConnectors.ConnectorHooks", true)!.GetField("Host", Static)!.GetValue(null) is null) return;
             object map = T("Graphic.Maps").GetField("Graphics", Static)!.GetValue(null)!;
             object dictionary = map.GetType().GetField("_map", Instance)!.GetValue(map)!;
             object? existing = ((IEnumerable)P(dictionary, "Values")).Cast<object>().FirstOrDefault(T("Graphic.PinProvider").IsInstanceOfType);

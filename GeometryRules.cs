@@ -4,7 +4,6 @@ internal static class GeometryRules
 {
     internal const double DefaultTextWidth = 54;
     internal const double PinLabelPadding = 2;
-    internal const double ConnectorHeight = 10;
 
     internal static double TextWidth(IEnumerable<double> pinWidths)
     {

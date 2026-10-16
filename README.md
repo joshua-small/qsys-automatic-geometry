@@ -1,15 +1,39 @@
 <img src="catalog/artwork/avitex-wordmark-blue.svg" alt="Avitex" width="220">
 
-# Q-SYS Automatic Geometry
+# Component Auto Width
 
-Automatically make components wide enough for their control-pin labels and use 10-unit Container/Channel Group connectors.
+Automatically fit component widths to exposed control-pin labels without changing their text.
 
-Install **Automatic Geometry** from [Q-SYS Mod Manager](https://github.com/joshua-small/qsys-mod-manager/releases/latest), then restart Designer. It works automatically and keeps component label text unchanged.
+The unreleased 0.2 source separates the former Automatic Geometry features:
 
-The module removes its loader-created menu item after Designer startup; it needs no manual action. Startup, compatibility and geometry diagnostics remain in JSON receipts under `%LOCALAPPDATA%\QsysSchematicTools\Designer-10.5\automatic-geometry`. An `installed` receipt records hook registration for that process, not acceptance of every geometry behavior. On an unsupported Designer build the module records a startup error and makes no hooks or menu changes.
+| Module | Behavior |
+| --- | --- |
+| Component Auto Width | Component label fitting. Keeps the existing `automatic-geometry` package ID and `Designer.Modules.AutomaticGeometry.dll` identity. |
+| [Compact Connectors](CompactConnectors/README.md) | Independent 10-unit Container/Channel Group connectors, pin snapping and open-drawer body snap targets. |
+| [Snake Connectors](SnakeConnectors/README.md) | Separate experimental Container bundle routing. The reported individual-channel failure inside Containers remains under investigation. |
 
-The automatic width behavior requires the mod. Existing connector positions are preserved.
+Each module can run independently with [Mods Core](https://github.com/joshua-small/qsys-mods-core). There is no Automatic Geometry Status menu action. The accompanying Core change puts initialization state, assembly identity and failures in **File > Preferences > Mod Diagnostics**. Ready means initialization succeeded; it does not establish acceptance of every behavior.
 
-Disable or remove the bundle through Mod Manager while Designer is closed. Supports the compatible Q-SYS Designer 10.5 build on Windows; this is an unofficial Designer extension.
+Width receipts retain `%LOCALAPPDATA%\QsysSchematicTools\Designer-10.5\automatic-geometry`. Shared status and the other modules use `%LOCALAPPDATA%\QsysMods\Designer-10.5\diagnostics`.
 
-The mod's manager description, artwork and version-specific notes live in [catalog/](catalog/README.md). Its release workflow publishes verified metadata to the separate approved catalog. Modern packages use no enable marker; Mod Manager controls activation by managing the module file.
+## Candidate and migration
+
+These are reviewable source candidates, not released or installed packages. Published 0.1.x Automatic Geometry packages still combine width and connector resizing. A coordinated release must replace that legacy DLL with the width-only build before enabling Compact Connectors. Competing connector implementations are unsupported; hook-owner preflight rejects existing patches.
+
+All three candidates require Core >=0.1.6 and <0.2.0; the diagnostics page needs the accompanying unreleased Core change. Ship Core as a package dependency, not a private runtime copy. New module identities, renamed presentation and dependency/file-layout changes need signed catalog approval before publication. Historical assets and exact pins remain immutable. The subprojects share this repository for review but produce separate DLLs; they are not automatically included in the width package.
+
+## Development and verification
+
+Clone `qsys-mods-core` beside this repository. Use .NET 10.0.112, local Designer references and separate WSL build outputs:
+
+```text
+dotnet build Designer.Modules.AutomaticGeometry.csproj -c Release -p:DesignerDir="<Designer directory>" --artifacts-path ../build-width
+dotnet build CompactConnectors/Designer.Modules.CompactConnectors.csproj -c Release -p:DesignerDir="<Designer directory>" --artifacts-path ../build-connectors
+dotnet run --project tests/GeometryTests.csproj -c Release --artifacts-path ../geometry-tests
+```
+
+Run the WPF harness on Windows. Its 44 checks cover independent hook ownership, fitting, connector geometry, snapping and rollback. Passing the installed Designer directory as an argument adds six metadata/IL checks without invoking or patching host methods. The supported Designer 10.5.0.0 hash is `0e7150f8dc02e0159e019188780fb003ce025f5ec18c491609cf337d849bda60`; Core also checks ModuleCommon. Other builds stay disabled.
+
+The split, drag snapping, open-drawer behavior and Preferences integration still need scoped Designer checks. `tests/LabProbe` and `tests/ConnectorProbe` retain guarded disposable-Designer fixtures; the connector probe now waits for Compact Connectors. Previous combined-module acceptance does not validate these candidates. No design or application installation was modified by these checks.
+
+Manager presentation and immutable release history live in [catalog/](catalog/README.md).
